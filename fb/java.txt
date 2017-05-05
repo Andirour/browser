@@ -1,0 +1,148 @@
+package com.sunnyapps.fb;
+
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.os.Build;
+import android.os.Environment;
+import android.content.ActivityNotFoundException;
+import android.webkit.WebView;
+import android.webkit.WebSettings;
+import android.webkit.WebViewClient;
+import android.webkit.WebChromeClient;
+import android.webkit.DownloadListener;
+import android.webkit.URLUtil;
+import android.app.DownloadManager;
+import android.net.Uri;
+import android.content.Intent;
+import android.widget.Toast;
+import android.webkit.ValueCallback;
+public class MainActivity extends AppCompatActivity {
+    static WebView web;
+    private ValueCallback<Uri> mUploadMessage;
+    public ValueCallback<Uri[]> uploadMessage;
+    public static final int REQUEST_SELECT_FILE = 100;
+    private final static int FILECHOOSER_RESULTCODE = 1;@Override
+    protected void onCreate(Bundle savedInstanceState) {
+
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        getSupportActionBar().hide();
+        web=(WebView) findViewById(R.id.web);
+        web.setWebViewClient(new WebViewClient());
+        WebSettings webSettings = web.getSettings();
+        webSettings.setJavaScriptEnabled(true);
+        webSettings.setBuiltInZoomControls(true);
+        web.loadUrl("https://www.facebook.com");
+        web.setWebChromeClient(new WebChromeClient() {//For 3.0+ Devices (Start)
+        // onActivityResult attached before constructor
+        protected void openFileChooser(ValueCallback uploadMsg, String acceptType)
+        {
+            mUploadMessage = uploadMsg;
+            Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("image/*");
+            startActivityForResult(Intent.createChooser(i, "File Browser"), FILECHOOSER_RESULTCODE);
+        }
+
+
+        // For Lollipop 5.0+ Devices
+    public boolean onShowFileChooser(WebView mWebView, ValueCallback<Uri[]> filePathCallback, WebChromeClient.FileChooserParams fileChooserParams)
+    {
+        if (uploadMessage != null) {
+            uploadMessage.onReceiveValue(null);
+            uploadMessage = null;
+        }
+
+        uploadMessage = filePathCallback;
+
+        Intent intent = fileChooserParams.createIntent();
+        try
+        {
+            startActivityForResult(intent, REQUEST_SELECT_FILE);
+        } catch (ActivityNotFoundException e)
+        {
+            uploadMessage = null;
+            Toast.makeText(getApplicationContext(), "Cannot Open File Chooser", Toast.LENGTH_LONG).show();
+            return false;
+        }
+        return true;
+    }
+
+    //For Android 4.1 only
+    protected void openFileChooser(ValueCallback<Uri> uploadMsg, String acceptType, String capture)
+    {
+        mUploadMessage = uploadMsg;
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("image/*");
+        startActivityForResult(Intent.createChooser(intent, "File Browser"), FILECHOOSER_RESULTCODE);
+    }
+
+    protected void openFileChooser(ValueCallback<Uri> uploadMsg)
+    {
+        mUploadMessage = uploadMsg;
+        Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType("image/*");
+        startActivityForResult(Intent.createChooser(i, "File Chooser"), FILECHOOSER_RESULTCODE);
+    }
+});
+        web.setDownloadListener(new DownloadListener() {
+
+            public void onDownloadStart(String url, String userAgent,
+                                        String contentDisposition, String mimetype,
+                                        long contentLength) {
+                DownloadManager.Request request = new DownloadManager.Request(
+                        Uri.parse(url));
+
+                request.allowScanningByMediaScanner();
+                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED); //Notify client once download is completed!
+                final String filename= URLUtil.guessFileName(url, contentDisposition, mimetype);
+                request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename);
+                DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                dm.enqueue(request);
+                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT); //This is important!
+                intent.addCategory(Intent.CATEGORY_OPENABLE); //CATEGORY.OPENABLE
+                intent.setType("*/*");//any application,any extension
+                Toast.makeText(getApplicationContext(), "Downloading File", //To notify the Client that the file is being downloaded
+                        Toast.LENGTH_LONG).show();
+
+            }
+        });
+    }
+    @Override
+    public void onBackPressed() {
+        WebView web=(WebView) findViewById(R.id.web);
+        if (web.canGoBack()) {
+            web.goBack();
+        } else {
+            super.onBackPressed();
+        }
+    }
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent intent)
+    {
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+        {
+            if (requestCode == REQUEST_SELECT_FILE)
+            {
+                if (uploadMessage == null)
+                    return;
+                uploadMessage.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, intent));
+                uploadMessage = null;
+            }
+        }
+        else if (requestCode == FILECHOOSER_RESULTCODE)
+        {
+            if (null == mUploadMessage)
+                return;
+            // Use MainActivity.RESULT_OK if you're implementing WebView inside Fragment
+            // Use RESULT_OK only if you're implementing WebView inside an Activity
+            Uri result = intent == null || resultCode != MainActivity.RESULT_OK ? null : intent.getData();
+            mUploadMessage.onReceiveValue(result);
+            mUploadMessage = null;
+        }
+        else
+            Toast.makeText(getApplicationContext(), "Failed to Upload Image", Toast.LENGTH_LONG).show();
+    }
+}
